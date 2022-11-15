@@ -1,0 +1,52 @@
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+# Create a student type table
+df_student_type <- data.frame(
+  type_id = c(0, 1),
+  type = c("Free", "Paid")
+)
+
+write_csv(df_student_type, "dataset/student_type.csv")
+
+# Getting subscription date from students to use it as filters on all charts
+df_purchases <- read_csv("dataset/365_student_purchases.csv")
+
+get_end_date_subscription <- function(subscription_type, start_date) {
+  case_when(
+    subscription_type == "Monthly" ~ start_date + 30,
+    subscription_type == "Quarterly" ~ start_date + 90,
+    subscription_type == "Annual" ~ start_date + 365,
+    TRUE ~ start_date
+  )
+}
+
+df_purchases <- df_purchases %>%
+  mutate(sub_start_date = date_purchased,
+         sub_end_date = get_end_date_subscription(purchase_type, date_purchased)) %>% 
+  select(student_id, sub_start_date, sub_end_date)
+
+### Minutes watched by users by day
+df_learning <- read_csv("dataset/365_student_learning.csv")
+
+# As there is no value of student watching more than one course per day
+# we don't need to summarise values in the dataset
+df_learning %>% 
+  group_by(student_id, date_watched) %>% 
+  summarise(courses_per_day = n()) %>%
+  filter(courses_per_day > 1)
+
+# Removing outliers where students watch more than 24 hours of classes on a single
+# day and where they watch 0 minutes
+df_learning <- df_learning %>% 
+  filter((minutes_watched <= 24*60) & (minutes_watched > 0)) %>% 
+# Adding the type of user on the day they watched de course
+  left_join(df_purchases, by = "student_id") %>% 
+  mutate(student_type = if_else((date_watched >= sub_start_date) & 
+                                  (date_watched <= sub_end_date), 
+                                1, 0, missing = 0)) %>%
+  group_by(student_id, course_id, minutes_watched, date_watched) %>%
+  summarise(student_type_id = if_else(sum(student_type) > 0, 1, 0))
+
+write_csv(df_learning, "dataset/student_learning.csv")
