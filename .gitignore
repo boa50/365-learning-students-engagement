@@ -1,3 +1,5 @@
 *.pbix
 *.png
 *.xlsx
+.Rhistory
+.RData

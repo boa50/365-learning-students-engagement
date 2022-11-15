@@ -15,8 +15,9 @@ library(ggplot2)
 df_purchases <- read_csv("dataset/365_student_purchases.csv")
 df_students <- read_csv("dataset/365_student_info.csv")
 
-length(unique(df_students$student_id))
-length(unique(df_purchases$student_id))
+# The purchase dates ranges from 2022-01-01 to 2022-10-20
+min(df_purchases$date_purchased)
+max(df_purchases$date_purchased)
 
 ### What is student engagement?
 
@@ -29,42 +30,56 @@ df_engagement %>%
   filter(engagement_lessons == 0) %>% 
   inner_join(df_learning, by = c("student_id", "date_engaged" = "date_watched"))
 
+# There are users that only engaged to do exams or quizzes on that day
+df_engagement %>% 
+  left_join(df_learning, by = c("student_id", "date_engaged" = "date_watched")) %>% 
+  filter(is.na(minutes_watched))
+
 # Plot a histogram of minutes_watched by student_id/date_watched
 
 # Group the data by student_id/date_watched because the same student could watch different courses on the same date
 df_learning %>% 
   group_by(student_id, date_watched) %>% 
   summarise(total_minutes_watched = sum(minutes_watched)) %>% 
+  # Getting only students that watch less than 24h of courses on the same day and at least 0.1 minute
+  filter(total_minutes_watched < (24*60) & total_minutes_watched > 0) %>% 
   ggplot(aes(total_minutes_watched)) +
   geom_histogram()
 
+# There is students that watched 0 minutes from a course
+df_learning %>% 
+  filter(minutes_watched == 0)
+
 df_test <- df_learning %>% 
   group_by(student_id, date_watched) %>% 
-  summarise(total_minutes_watched = sum(minutes_watched))
+  summarise(total_minutes_watched = sum(minutes_watched)) %>%
+  filter(total_minutes_watched < (24*60)) %>% 
+  filter(total_minutes_watched > 0)
 
 # There is a user that watched more than 28 hours of courses on the same day (I think this is a problem)
-max(df_test$total_minutes_watched)/60
+summary(df_test$total_minutes_watched)
 
 ### Is there a difference on student engagement based on their country? (maybe poorer countries with less subscriptions will have less engagement)
-
 df_join_purchases_students <- inner_join(df_students, df_purchases, by = "student_id")
 
+
+# Does the same student have purchased more than one time? (renewed subscription)
+df_students_more_purchases <- df_purchases %>% 
+  group_by(student_id) %>% 
+  summarise(purchases = n()) %>% 
+  filter(purchases > 1)
+df_students_more_purchases$student_id
+
 # Add the column to get how many days are the subscription
-df_join_purchases_students %>% 
+df_join_purchases_students <- df_join_purchases_students %>% 
+  filter(student_id %in% df_students_more_purchases$student_id) %>% 
+  arrange(student_id) %>% 
   mutate(sub_start_date = date_purchased,
-         sub_end_date)
+         sub_end_date = get_end_date_subscription(purchase_type, date_purchased),
+         days_subscribed = sub_end_date - sub_start_date)
+  
 
 df_sample <- df_join_purchases_students[1:5,]
-
-# Check column types
-str(df_sample)
-
-# Convert dates
-df_sample$date_registered <- as.Date(df_sample$date_registered)
-df_sample$date_purchased <- as.Date(df_sample$date_purchased)
-
-sample_date <- as.Date("2022-01-01")
-sample_purchase_type <- "Monthly"
 
 get_end_date_subscription <- function(subscription_type, start_date) {
   case_when(
@@ -75,11 +90,24 @@ get_end_date_subscription <- function(subscription_type, start_date) {
   )
 }
 
-
-df_sample$date_purchased
-
-get_end_date_subscription("Annual", sample_date)
-
 df_sample %>% 
   mutate(end_sub = get_end_date_subscription(purchase_type, date_purchased),
          days_subscribed = end_sub - date_purchased)
+
+
+### Which kind of purchase is more common?
+df_purchases %>% 
+  group_by(purchase_type) %>% 
+  summarise(quantity = n())
+
+### What is the difference between free and paid users engagement?
+df_engagement_subscribed_students <- df_join_purchases_students %>% 
+  inner_join(df_engagement, by = "student_id") %>% 
+  select(student_id, sub_start_date, sub_end_date, engagement_id, date_engaged) %>% 
+  mutate(engagement_type = if_else((date_engaged >= sub_start_date) & (date_engaged <= sub_end_date), 1, 0)) %>% 
+  group_by(student_id, engagement_id, date_engaged) %>% 
+  summarise(engagement_type = if_else(sum(engagement_type) > 0, "Paid", "Free"))
+
+
+df_engagement_subscribed_students %>% 
+  filter(engagement_type == "Paid")
