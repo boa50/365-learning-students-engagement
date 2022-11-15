@@ -2,6 +2,7 @@ library(readr)
 library(dplyr)
 library(ggplot2)
 
+### Base datasets
 # Create a student type table
 df_student_type <- data.frame(
   type_id = c(0, 1),
@@ -27,6 +28,7 @@ df_purchases <- df_purchases %>%
          sub_end_date = get_end_date_subscription(purchase_type, date_purchased)) %>% 
   select(student_id, sub_start_date, sub_end_date)
 
+
 ### Minutes watched by users by day
 df_learning <- read_csv("dataset/365_student_learning.csv")
 
@@ -50,3 +52,42 @@ df_learning <- df_learning %>%
   summarise(student_type_id = if_else(sum(student_type) > 0, 1, 0))
 
 write_csv(df_learning, "dataset/student_learning.csv")
+
+
+### Engaged days in a row
+df_engagement <- read_csv("dataset/365_student_engagement.csv")
+
+df_engagement <-df_engagement %>% 
+  select(student_id, date_engaged) %>% 
+  arrange(student_id, date_engaged) %>% 
+  mutate(previous_student_same = if_else(lag(student_id) == student_id,
+                                         TRUE, FALSE, missing = FALSE),
+         continuous_date = if_else(lag(date_engaged) == date_engaged - 1,
+                                   TRUE, FALSE, missing = FALSE),
+         increase_count = previous_student_same & continuous_date)
+
+# Creating groups of engagement in a row of days
+group_test <- 0  
+df_engagement$group <- sapply(df_engagement$increase_count, function(x) { 
+  if(x) {
+    group_test  
+  } else {
+    group_test <<- group_test + 1
+    group_test  
+  }
+})
+
+df_engagement <- df_engagement %>% 
+  group_by(student_id, group) %>% 
+  summarise(days_in_row = n(),
+            last_date_engaged = max(date_engaged)) %>% 
+  select(student_id, last_date_engaged, days_in_row) %>%
+# Adding the type of user on the last day they engaged on the course
+  left_join(df_purchases, by = "student_id") %>% 
+  mutate(student_type = if_else((last_date_engaged >= sub_start_date) & 
+                                  (last_date_engaged <= sub_end_date), 
+                                1, 0, missing = 0)) %>%
+  group_by(student_id, last_date_engaged, days_in_row) %>%
+  summarise(student_type_id = if_else(sum(student_type) > 0, 1, 0))
+
+write_csv(df_engagement, "dataset/student_engagement_in_row.csv")
