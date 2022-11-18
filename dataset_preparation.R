@@ -34,10 +34,8 @@ df_student <- read_csv("dataset/365_student_info.csv")
 
 df_student <- df_student %>% 
   left_join(df_purchases, by = "student_id") %>% 
-  mutate(student_type = if_else((date_registered >= sub_start_date) & 
-                                  (date_registered <= sub_end_date), 
-                                1, 0, missing = 0)) %>% 
-  select(-sub_start_date, -sub_end_date)
+  group_by(student_id, student_country, date_registered) %>%
+  summarise(student_type_id = if_else(sum(!is.na(sub_start_date)) > 0, 1, 0))
 
 write_csv(df_student, "dataset/student_info.csv")
 
@@ -149,3 +147,8 @@ df_engagement <- df_engagement %>%
   summarise(student_type_id = if_else(sum(student_type) > 0, 1, 0))
 
 write_csv(df_engagement, "dataset/student_engagement_more_time.csv")
+
+
+df_purchases %>% 
+  group_by(student_id) %>% 
+  summarise(n = n())
