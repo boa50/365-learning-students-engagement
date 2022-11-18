@@ -91,3 +91,22 @@ df_engagement <- df_engagement %>%
   summarise(student_type_id = if_else(sum(student_type) > 0, 1, 0))
 
 write_csv(df_engagement, "dataset/student_engagement_in_row.csv")
+
+
+### Engaged days per user and per week
+df_engagement <- read_csv("dataset/365_student_engagement.csv")
+
+df_engagement <- df_engagement %>% 
+  mutate(week_n = strftime(date_engaged, "%V")) %>% 
+  group_by(student_id, week_n) %>% 
+  summarise(last_date_engaged = max(date_engaged),
+            n_engagements = n()) %>% 
+# Adding the type of user on the last day they engaged on the course
+  left_join(df_purchases, by = "student_id") %>% 
+  mutate(student_type = if_else((last_date_engaged >= sub_start_date) & 
+                                  (last_date_engaged <= sub_end_date), 
+                                1, 0, missing = 0)) %>%
+  group_by(student_id, week_n, n_engagements) %>%
+  summarise(student_type_id = if_else(sum(student_type) > 0, 1, 0))
+
+write_csv(df_engagement, "dataset/student_engagement_per_week.csv")
