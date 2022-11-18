@@ -3,7 +3,7 @@ library(dplyr)
 library(ggplot2)
 
 ### Base datasets
-# Create a student type table
+# Create a student subscription type table
 df_student_type <- data.frame(
   type_id = c(0, 1),
   type = c("Free", "Paid")
@@ -27,6 +27,19 @@ df_purchases <- df_purchases %>%
   mutate(sub_start_date = date_purchased,
          sub_end_date = get_end_date_subscription(purchase_type, date_purchased)) %>% 
   select(student_id, sub_start_date, sub_end_date)
+
+
+# Enhancing student info to show if the student have subscribed for at least 1 month
+df_student <- read_csv("dataset/365_student_info.csv")
+
+df_student <- df_student %>% 
+  left_join(df_purchases, by = "student_id") %>% 
+  mutate(student_type = if_else((date_registered >= sub_start_date) & 
+                                  (date_registered <= sub_end_date), 
+                                1, 0, missing = 0)) %>% 
+  select(-sub_start_date, -sub_end_date)
+
+write_csv(df_student, "dataset/student_info.csv")
 
 
 ### Minutes watched by users by day
@@ -82,6 +95,8 @@ df_engagement <- df_engagement %>%
   summarise(days_in_row = n(),
             last_date_engaged = max(date_engaged)) %>% 
   select(student_id, last_date_engaged, days_in_row) %>%
+# Only getting students that attended to courses for more than one day
+  filter(days_in_row >= 2) %>% 
 # Adding the type of user on the last day they engaged on the course
   left_join(df_purchases, by = "student_id") %>% 
   mutate(student_type = if_else((last_date_engaged >= sub_start_date) & 
