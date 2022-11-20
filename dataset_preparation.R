@@ -151,3 +151,18 @@ df_engagement <- df_engagement %>%
   summarise(student_type_id = if_else(sum(student_type) > 0, 1, 0))
 
 write_csv(df_engagement, "dataset/student_engagement_more_time.csv")
+
+
+### Create a full student engagement dataset with subscription type
+df_engagement <- read_csv("dataset/365_student_engagement.csv")
+
+df_engagement <- df_engagement %>% 
+  select(student_id, date_engaged) %>% 
+  left_join(df_purchases, by = "student_id") %>% 
+  mutate(student_type = if_else((date_engaged >= sub_start_date) & 
+                                  (date_engaged <= sub_end_date), 
+                                1, 0, missing = 0)) %>%
+  group_by(student_id, date_engaged) %>%
+  summarise(student_type_id = if_else(sum(student_type) > 0, 1, 0))
+
+write_csv(df_engagement, "dataset/student_engagement_full.csv")
