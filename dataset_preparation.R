@@ -106,30 +106,6 @@ df_engagement <- df_engagement %>%
 write_csv(df_engagement, "dataset/student_engagement_in_row.csv")
 
 
-### Students that engaged at least 5 times and 30 days or more
-df_engagement <- read_csv("dataset/365_student_engagement.csv")
-
-df_engagement <- df_engagement %>% 
-  group_by(student_id) %>% 
-  summarise(first_engagement = min(date_engaged),
-            last_engagement = max(date_engaged),
-            n_engagements = n()) %>% 
-  mutate(dt_diff_engaged = last_engagement - first_engagement) %>% 
-  filter(dt_diff_engaged >= 30 &
-           n_engagements >= 5) %>% 
-# Adding the type of user on the last day they engaged on the course
-  left_join(df_purchases, by = "student_id") %>% 
-  mutate(student_type = if_else(((last_engagement >= sub_start_date) & 
-                                  (last_engagement <= sub_end_date)) |
-                                  ((first_engagement >= sub_start_date) & 
-                                     (first_engagement <= sub_end_date)), 
-                                1, 0, missing = 0)) %>%
-  group_by(student_id, n_engagements, dt_diff_engaged) %>%
-  summarise(student_type_id = if_else(sum(student_type) > 0, 1, 0))
-
-write_csv(df_engagement, "dataset/student_engagement_more_time.csv")
-
-
 ### Create a full student engagement dataset with subscription type
 df_engagement <- read_csv("dataset/365_student_engagement.csv")
 df_student <- read_csv("dataset/365_student_info.csv")
